@@ -4,6 +4,48 @@ from src.llm.client import llm_client
 
 logger = logging.getLogger(__name__)
 
+# 一次调用模式下，助手回复正文与结构化记忆之间的分隔符
+META_MARK = '<<<META>>>'
+
+_EMPTY_META = {
+    "facts": {}, "events": [], "entities": [],
+    "current_emotion": {"emotion": "neutral", "intensity": 5},
+    "followups": [], "topics": [],
+}
+
+
+def split_reply_and_meta(text: str):
+    """把「角色回复 + 末尾 JSON 记忆」拆开。
+
+    任何解析异常都必须退化成「整段当作回复、记忆为空」——绝不能让提取失败毁掉回复。
+    """
+    if not text:
+        return "", dict(_EMPTY_META)
+    if META_MARK not in text:
+        return text.strip(), dict(_EMPTY_META)
+    reply, _, tail = text.partition(META_MARK)
+    reply = reply.strip()
+    tail = tail.strip()
+    # 模型有时会套代码围栏
+    tail = re.sub(r"^```\w*\s*", "", tail)
+    tail = re.sub(r"\s*```$", "", tail).strip()
+    # 只取第一个完整 JSON 对象，防止后面跟废话
+    start = tail.find("{")
+    end = tail.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return reply, dict(_EMPTY_META)
+    try:
+        meta = json.loads(tail[start:end + 1])
+    except Exception as e:
+        logger.warning(f"记忆 JSON 解析失败（已忽略，回复照常返回）: {e}")
+        return reply, dict(_EMPTY_META)
+    if not isinstance(meta, dict):
+        return reply, dict(_EMPTY_META)
+    merged = dict(_EMPTY_META)
+    merged.update(meta)
+    return reply, merged
+
+
 EXTRACT_PROMPT = '''你是一个信息分析助手。分析用户的对话消息，做以下事情：
 
 ## 1. 事实提取 (facts)
@@ -81,6 +123,12 @@ class InfoExtractor:
         }
 
     def extract(self, message: str) -> dict:
+        """【已退役】旧的独立提取流程：正则 + 第二次 LLM 调用。
+
+        主流程（CompanionAgent.process_message）现在改用「一次调用」模式：
+        回复正文末尾附带 <<<META>>> JSON，用 split_reply_and_meta() 拆开。
+        这个方法保留给命令行/调试场景，不要再接回聊天主链路（会白烧一次模型调用）。
+        """
         result = {
             "facts": {},
             "events": [],
@@ -91,6 +139,9 @@ class InfoExtractor:
         }
         regex_facts = self._regex_extract(message)
         result["facts"].update(regex_facts)
+        if not config.llm.extract_with_llm:
+            # 免费通道限流严格：跳过 LLM 提取，只用正则，保证主回复能发出去
+            return result
         llm_result = self._llm_extract(message)
         if llm_result:
             if "facts" in llm_result:
@@ -102,6 +153,10 @@ class InfoExtractor:
             result["followups"] = llm_result.get("followups", [])
             result["topics"] = llm_result.get("topics", [])
         return result
+
+    def regex_facts(self, message: str) -> dict:
+        """零成本的正则事实抽取（姓名字段、手机号等），供一次调用模式复用"""
+        return self._regex_extract(message)
 
     def _regex_extract(self, message: str) -> dict:
         result = {}

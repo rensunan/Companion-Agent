@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小伴 · 陪伴智能体</title>
+<meta name="theme-color" content="#0a1220">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💛</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
+</head>
+<body>
+
+<!-- ============ 登录 ============ -->
+<section id="login-view" class="login-view">
+  <div class="login-card">
+    <div class="login-brand">💛</div>
+    <h1>小伴 · 陪伴智能体</h1>
+    <p class="login-sub">你的记忆只属于你</p>
+
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab active" data-auth="login">登录</button>
+      <button type="button" class="auth-tab" data-auth="signup">注册</button>
+    </div>
+
+    <form id="login-form" class="auth-form" autocomplete="on">
+      <label for="login-email">邮箱</label>
+      <input id="login-email" type="email" placeholder="you@example.com" autocomplete="username" required>
+
+      <label for="login-password">密码</label>
+      <input id="login-password" type="password" placeholder="账户密码" autocomplete="current-password" required>
+
+      <button type="submit" id="login-btn" class="btn primary wide">登录</button>
+      <p class="forgot"><a href="javascript:void(0)" id="forgot-link">忘记密码 / 首次设置密码？</a></p>
+      <p class="forgot"><a href="javascript:void(0)" id="otp-login-link">没有密码？用邮箱验证码登录</a></p>
+    </form>
+
+    <form id="otp-form" class="auth-form" autocomplete="on" hidden>
+      <label for="otp-email">邮箱</label>
+      <input id="otp-email" type="email" placeholder="you@example.com" autocomplete="username" required>
+
+      <label for="otp-code">邮箱验证码</label>
+      <div class="code-row">
+        <input id="otp-code" inputmode="numeric" placeholder="邮件里的 6 位数字">
+        <button type="button" id="send-otp-login" class="btn ghost">获取验证码</button>
+      </div>
+
+      <button type="submit" id="otp-btn" class="btn primary wide">验证码登录</button>
+      <p class="forgot"><a href="javascript:void(0)" id="back-login2">← 返回密码登录</a></p>
+    </form>
+
+    <form id="reset-form" class="auth-form" autocomplete="on" hidden>
+      <label for="reset-email">邮箱</label>
+      <input id="reset-email" type="email" placeholder="注册时用的邮箱" autocomplete="username" required>
+
+      <label for="reset-code">邮箱验证码</label>
+      <div class="code-row">
+        <input id="reset-code" inputmode="numeric" placeholder="邮件里的 6 位数字">
+        <button type="button" id="send-reset-code" class="btn ghost">获取验证码</button>
+      </div>
+
+      <label for="reset-password">新密码</label>
+      <input id="reset-password" type="password" placeholder="至少 8 位" autocomplete="new-password">
+
+      <label for="reset-password2">确认新密码</label>
+      <input id="reset-password2" type="password" placeholder="再输入一次" autocomplete="new-password">
+
+      <button type="submit" id="reset-btn" class="btn primary wide">设置新密码并登录</button>
+      <p class="forgot"><a href="javascript:void(0)" id="back-login">← 返回登录</a></p>
+    </form>
+
+    <form id="signup-form" class="auth-form" autocomplete="on" hidden>
+      <label for="signup-email">邮箱</label>
+      <input id="signup-email" type="email" placeholder="you@example.com" autocomplete="email" required>
+
+      <label for="signup-code">邮箱验证码</label>
+      <div class="code-row">
+        <input id="signup-code" inputmode="numeric" placeholder="邮件里的 6 位数字">
+        <button type="button" id="send-code" class="btn ghost">获取验证码</button>
+      </div>
+
+      <label for="signup-password">设置密码</label>
+      <input id="signup-password" type="password" placeholder="至少 8 位" autocomplete="new-password">
+
+      <label for="signup-password2">确认密码</label>
+      <input id="signup-password2" type="password" placeholder="再输入一次" autocomplete="new-password">
+
+      <button type="submit" id="signup-btn" class="btn primary wide">注册并登录</button>
+    </form>
+
+    <p id="login-msg" class="login-msg"></p>
+    <p class="login-foot">注册需一次邮箱验证码；注册后用邮箱 + 密码登录。</p>
+  </div>
+</section>
+
+<!-- ============ 主应用 ============ -->
+<div id="app-view" class="app" hidden>
+
+  <header class="hero">
+    <div class="orb" id="hero-orb">💛</div>
+    <div class="hero-text">
+      <p class="hero-title" id="hero-title">小伴 · 陪伴伙伴</p>
+      <p class="hero-sub" id="hero-sub">你的陪伴伙伴</p>
+    </div>
+    <div class="badges" id="hero-badges"></div>
+    <div class="user-box">
+      <span id="user-email" class="user-email"></span>
+      <button id="logout-btn" class="btn ghost tiny">退出</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="chat">💬 聊天</button>
+    <button class="tab" data-tab="dash">📊 记忆仪表盘</button>
+    <button class="tab" data-tab="search">🔍 搜索记忆</button>
+    <button class="tab" data-tab="journal">📔 情绪日记</button>
+  </nav>
+
+  <!-- 聊天：左历史 / 中对话 / 右角色，左右两栏可收起 -->
+  <section class="panel active" id="panel-chat">
+    <div class="chat-toolbar">
+      <button id="toggle-history" class="btn ghost tiny col-toggle" title="显示 / 收起左侧的历史对话">◀ 历史对话</button>
+      <span class="grow"></span>
+      <button id="toggle-side" class="btn ghost tiny col-toggle" title="显示 / 收起右侧的角色面板">角色面板 ▶</button>
+    </div>
+
+    <div class="chat-wrap" id="chat-wrap">
+      <!-- 左栏：历史对话 -->
+      <aside class="history-col" id="history-col">
+        <div class="hist-head">
+          <h3 class="card-title">🗂 历史对话</h3>
+          <button id="hist-new" class="btn ghost tiny" title="开启新对话">＋ 新对话</button>
+        </div>
+        <div class="hist-list" id="hist-list">
+          <div class="empty" style="padding:16px 6px">读取中…</div>
+        </div>
+        <p class="hint hist-hint">点一段就接着聊</p>
+      </aside>
+
+      <!-- 中栏：当前对话 -->
+      <div class="chat-col">
+        <div class="chat-meta" id="chat-meta"></div>
+        <div class="chat" id="chat"></div>
+        <div class="composer">
+          <textarea id="msg-input" rows="1" placeholder="和 TA 说点什么…（Enter 发送 / Shift+Enter 换行）"></textarea>
+          <button id="send-btn" class="btn primary">发送</button>
+        </div>
+        <div class="chat-actions">
+          <button id="new-chat" class="btn primary small">🆕 开启新对话</button>
+          <button id="reset-chat" class="btn ghost small">🗑 清空本对话</button>
+          <button id="gen-journal" class="btn ghost small">📔 写日记</button>
+        </div>
+      </div>
+
+      <aside class="side-col" id="side-col">
+        <div class="card">
+          <h3 class="card-title">🎭 角色切换</h3>
+          <label class="field-label" for="gender-select">性别分组</label>
+          <select id="gender-select" class="select">
+            <option value="male">🚹 男性</option>
+            <option value="female">🚺 女性</option>
+            <option value="neutral">🚻 中性</option>
+          </select>
+          <label class="field-label" for="char-select">角色</label>
+          <select id="char-select" class="select"></select>
+          <button id="switch-char" class="btn primary wide">✅ 使用该角色</button>
+          <p class="hint" id="char-count"></p>
+        </div>
+        <div class="card">
+          <h3 class="card-title">🧠 模型</h3>
+          <label class="field-label" for="model-select">对话使用的模型</label>
+          <select id="model-select" class="select"></select>
+          <p class="hint" id="model-hint">正在读取可用模型…</p>
+        </div>
+        <div class="card">
+          <h3 class="card-title">📌 当前状态</h3>
+          <div id="status-box" class="status-box"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 仪表盘 -->
+  <section class="panel" id="panel-dash">
+    <div class="toolbar">
+      <button id="refresh-dash" class="btn ghost small">🔄 刷新</button>
+      <button id="graph-btn" class="btn ghost small">🕸️ 关系图</button>
+      <button id="clean-dup" class="btn ghost small">🧹 清理重复记录</button>
+      <button id="clear-followups" class="btn danger small">🗑️ 清空待追问</button>
+    </div>
+    <div id="dash-body"></div>
+  </section>
+
+  <!-- 搜索 -->
+  <section class="panel" id="panel-search">
+    <div class="search-bar">
+      <input id="search-input" class="input" placeholder="搜索对话内容（留空＝按对话列出全部记录）">
+      <button id="search-btn" class="btn primary">🔍 搜索</button>
+      <button id="clear-msgs" class="btn danger">🗑️ 全部清除</button>
+    </div>
+    <p class="hint" id="search-hint"></p>
+    <div id="search-result" class="day-list"></div>
+  </section>
+
+  <!-- 日记 -->
+  <section class="panel" id="panel-journal">
+    <div class="toolbar">
+      <button id="gen-journal-2" class="btn primary small">✨ 生成今日日记</button>
+      <button id="refresh-journal" class="btn ghost small">🔄 刷新</button>
+    </div>
+    <div id="journal-body"></div>
+  </section>
+
+</div>
+
+<button id="theme-toggle" class="theme-toggle" title="切换白天 / 黑夜">🌙</button>
+<div id="toast" class="toast"></div>
+
+<!-- ============ 关系图 ============ -->
+<div id="graph-overlay" class="graph-overlay" hidden>
+  <div class="graph-panel">
+    <header class="graph-head">
+      <h3 class="graph-title">🕸️ 关系图</h3>
+      <span id="graph-stats" class="meta"></span>
+      <div class="graph-head-right">
+        <button id="graph-add-person" class="btn ghost tiny">➕ 新增人物</button>
+        <button id="graph-close" class="btn ghost tiny">✕ 关闭</button>
+      </div>
+    </header>
+    <div class="graph-body">
+      <div id="graph-canvas" class="graph-canvas"></div>
+      <aside id="graph-detail" class="graph-detail">
+        <p class="empty">点一下节点，看这个人的事件</p>
+      </aside>
+    </div>
+    <div class="graph-legend" id="graph-legend"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

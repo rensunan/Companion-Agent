@@ -6,17 +6,29 @@ from dotenv import load_dotenv
 load_dotenv()
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
+def _default_extract_with_llm() -> bool:
+    """免费通道限流严格（每 IP 30 秒 1 次），默认跳过 LLM 信息提取，改用正则。
+    换成自己的服务后自动启用；也可用 EXTRACT_WITH_LLM=0/1 强制指定。"""
+    env = os.getenv('EXTRACT_WITH_LLM')
+    if env is not None:
+        return env == '1'
+    return 'pollinations' not in os.getenv('API_BASE_URL', 'https://text.pollinations.ai/openai')
+
+
 @dataclass
 class LLMConfig:
     ollama_base_url: str = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
     ollama_model: str = os.getenv('OLLAMA_MODEL', 'Echo-N1')
-    api_base_url: str = os.getenv('API_BASE_URL', 'https://api.openai.com/v1')
-    api_key: str = os.getenv('API_KEY', '')
-    api_model: str = os.getenv('API_MODEL', 'gpt-4o-mini')
+    # 默认走免密钥的公开 OpenAI 兼容通道（免费额度、有速率限制）。
+    # 想换成自己的服务或本地代理，在 .env 里覆盖这三项即可，无需改代码。
+    api_base_url: str = os.getenv('API_BASE_URL', 'https://text.pollinations.ai/openai')
+    api_key: str = os.getenv('API_KEY', 'sk-free-channel')
+    api_model: str = os.getenv('API_MODEL', 'openai')
     temperature: float = 0.7
     max_tokens: int = 2048
     extract_temperature: float = 0.1
     extract_max_tokens: int = 1024
+    extract_with_llm: bool = field(default_factory=_default_extract_with_llm)
 
 @dataclass
 class EmbeddingConfig:
